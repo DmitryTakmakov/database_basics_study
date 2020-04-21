@@ -14,10 +14,11 @@ SELECT * FROM products p
 -- и соответствующее название каталога name из таблицы catalogs.
 
 CREATE OR REPLACE VIEW names_cats AS 
-  SELECT name,
-    (SELECT name FROM catalogs WHERE id = products.catalog_id) AS catalog_name
-      FROM products
-    ORDER BY catalog_name;
+  SELECT products.name AS product, catalogs.name AS category
+    FROM products
+      JOIN catalogs
+        ON products.catalog_id = catalogs.id 
+    ORDER BY category;
 
 SELECT * FROM names_cats;
 
@@ -27,12 +28,13 @@ SELECT * FROM names_cats;
 
 DROP FUNCTION IF EXISTS hello;
 CREATE FUNCTION hello ()
-RETURNS VARCHAR(15) DETERMINISTIC
+RETURNS VARCHAR(15) NO SQL
 BEGIN
+	SET @hour_now = DATE_FORMAT(NOW(), '%H');
 	CASE
-	  WHEN DATE_FORMAT(NOW(), '%H') BETWEEN 6 AND 11 THEN RETURN 'Доброе утро!';
-	  WHEN DATE_FORMAT(NOW(), '%H') BETWEEN 12 AND 17 THEN RETURN 'Добрый день!';
-	  WHEN DATE_FORMAT(NOW(), '%H') BETWEEN 18 AND 23 THEN RETURN 'Добрый вечер!';
+	  WHEN @hour_now BETWEEN 6 AND 11 THEN RETURN 'Доброе утро!';
+	  WHEN @hour_now BETWEEN 12 AND 17 THEN RETURN 'Добрый день!';
+	  WHEN @hour_now BETWEEN 18 AND 23 THEN RETURN 'Добрый вечер!';
 	  ELSE RETURN 'Доброй ночи!';
 	END CASE;
 END -- я "допиливал" эту функцию в терминале, поэтому тут без ;
@@ -45,9 +47,7 @@ DROP TRIGGER IF EXISTS name_not_null;
 CREATE TRIGGER name_not_null BEFORE UPDATE ON products
   FOR EACH ROW 
     BEGIN 
-	    IF NEW.name IS NOT NULL OR OLD.description IS NOT NULL THEN 
-	      SET NEW.name = NEW.name;  -- я не уверен в правильности такой записи, но ведь что-то же должно происходить!
-	    ELSE 
+	    IF NEW.name IS NULL AND OLD.description IS NULL THEN 
 	      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Both fields can not be NULL. Update cancelled.';
 	    END IF;
     END
@@ -56,9 +56,7 @@ DROP TRIGGER IF EXISTS description_not_null;
 CREATE TRIGGER description_not_null BEFORE UPDATE ON products
   FOR EACH ROW 
     BEGIN 
-	    IF NEW.description IS NOT NULL OR OLD.name IS NOT NULL THEN 
-	      SET NEW.description = NEW.description;
-	    ELSE 
+	    IF NEW.description IS NULL AND OLD.name IS NULL THEN 
 	      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Both fields can not be NULL. Update cancelled.';
 	    END IF;
     END
