@@ -41,17 +41,19 @@ CREATE UNIQUE INDEX users_phone_up ON users(phone);
 
 
 SELECT DISTINCT c.name AS com_name,
-  (COUNT(cu.user_id) OVER()/20) AS avg_users, -- я сдаюсь! никак не могу заставить функцию посчитать DISTINCT айди внутри оконной функции!
+  (COUNT(cu.user_id) OVER() / (SELECT COUNT(*) FROM communities)) AS avg_users, -- я сдаюсь! никак не могу заставить функцию посчитать DISTINCT айди внутри оконной функции!
   MIN(TIMESTAMPDIFF(YEAR, p.birthday, NOW())) OVER w AS youngest,
   MAX(TIMESTAMPDIFF(YEAR, p.birthday, NOW())) OVER w AS oldest,
   COUNT(cu.user_id) OVER w AS users_in_coms,
-  COUNT(p.user_id) OVER() AS total, 
+  (SELECT COUNT(*) FROM users) AS total, 
   (COUNT(cu.user_id) OVER w/COUNT(p.user_id) OVER()) * 100 AS percentage
 	  FROM communities AS c 
-	    JOIN communities_users AS cu 
+	    LEFT JOIN communities_users AS cu 
 	      ON c.id = cu.community_id 
-	    JOIN profiles AS p
+	    LEFT JOIN profiles AS p
 	      ON cu.user_id = p.user_id 
+	    LEFT JOIN users AS u
+	      ON p.user_id = u.id 
 	        WINDOW w AS (PARTITION BY c.id);
 
 

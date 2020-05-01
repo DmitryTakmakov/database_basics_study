@@ -4,11 +4,11 @@
 
 DROP TABLE IF EXISTS logs;
 CREATE TABLE `logs` (
-  `id` int unsigned NOT NULL AUTO_INCREMENT,
-  `date_time` datetime,
-  `table_name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `date_time` datetime default current_timestamp,
+  `table_name` varchar(255) NOT NULL,
   `original_id` int unsigned NOT NULL,
-  `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
+  `name` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
 ) COMMENT='Логи активности' ENGINE=ARCHIVE;
 
@@ -49,5 +49,3 @@ INSERT INTO products (name, description, price, catalog_id) VALUES
   ('Xiaomi Mi Display 23.8', 'Монитор Xiaomi Mi Display с диагональю 23.8 дюйма', 14000, 8);
 
 SELECT * FROM logs;
- 
-   
