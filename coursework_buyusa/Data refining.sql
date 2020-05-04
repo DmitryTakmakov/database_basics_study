@@ -64,8 +64,21 @@ INSERT INTO warehouses(warehouse_name) VALUES
   ('USA'), 
   ('UK'), 
   ('Germany');
+
+-- Создаем таблицу коротких алиасов для заказов. Она нужна для красивого отображения номеров заказов на фронтэнде
+DROP TABLE IF EXISTS order_types_aliases;
+CREATE TABLE order_types_aliases (
+  full_order_type ENUM("Ebay-BIN", "Ebay-Auction", "Online Store", "Special Order", "Mail-Forwarding"),
+  short_alias VARCHAR(4) UNIQUE NOT NULL
+) ENGINE=InnoDB;
+-- Вставляем данные в эту таблицу
+INSERT INTO order_types_aliases (full_order_type, short_alias) VALUES ('Ebay-BIN', 'EBB-');
+INSERT INTO order_types_aliases (full_order_type, short_alias) VALUES ('Ebay-Auction', 'EBA-');
+INSERT INTO order_types_aliases (full_order_type, short_alias) VALUES ('Online Store', 'STR-');
+INSERT INTO order_types_aliases (full_order_type, short_alias) VALUES ('Special Order', 'SPO-');
+INSERT INTO order_types_aliases (full_order_type, short_alias) VALUES ('Mail-Forwarding', 'MF-');
  
--- Здесь я понял, что немного ошибся с id склада, поэтому немного поправим данные в других таблицах.
+-- Я немного ошибся с id склада, когда генерировал данные, поэтому поправим данные в соответствующих таблицах.
 -- Исправляем значения warehouse_id с 0 на 1
 
 UPDATE orders
@@ -74,14 +87,9 @@ UPDATE orders
 UPDATE parcels 
   SET parcel_warehouse_id = 1
     WHERE parcel_warehouse_id = 0;
-ALTER TABLE orders
-  MODIFY COLUMN order_warehouse_id INT UNSIGNED DEFAULT 1;
-ALTER TABLE parcels
-  MODIFY COLUMN parcel_warehouse_id INT UNSIGNED DEFAULT 1;
-ALTER TABLE parcels 
-  MODIFY COLUMN parcel_address_id INT UNSIGNED NOT NULL;
 
--- Теперь добавляем везде внешние ключи
+-- Теперь добавляем везде внешние ключи. В тех ключах, где ON DELETE NO ACTION логика такая, что пользователя можно удалить,
+-- но его заказы, посылки, платеж и счета останутся в системе для отчетности.
 
 ALTER TABLE users_permissions 
   ADD CONSTRAINT users_permissions_user_id_fk
@@ -92,96 +100,193 @@ ALTER TABLE users_permissions
     FOREIGN KEY (user_permission) REFERENCES permissions(permission_id)
       ON DELETE NO ACTION;
 
+ALTER TABLE orders 
+  ADD CONSTRAINT orders_users_id_fk
+    FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE NO ACTION;
+     
+ALTER TABLE orders
+  ADD CONSTRAINT orders_warehouse_id_fk
+    FOREIGN KEY (order_warehouse_id) REFERENCES warehouses(warehouse_id)
+      ON DELETE NO ACTION;
 
+ALTER TABLE payments 
+  ADD CONSTRAINT payment_users_id_fk
+    FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE NO ACTION;
 
-CREATE TABLE users (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  first_name VARCHAR(100) NOT NULL,
-  last_name VARCHAR(100) NOT NULL,
-  login VARCHAR(100) UNIQUE NOT NULL,
-  password VARCHAR(50) NOT NULL,
-  email VARCHAR(100) UNIQUE NOT NULL,
-  phone VARCHAR(13) UNIQUE NOT NULL,
-  country VARCHAR(50) DEFAULT NULL,
-  city VARCHAR(100) DEFAULT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+ALTER TABLE bills 
+  ADD CONSTRAINT bills_users_id_fk
+    FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE NO ACTION;
+     
+ALTER TABLE parcels_addresses 
+  ADD CONSTRAINT parcels_addresses_users_id_fk
+    FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE NO ACTION;
+     
+ALTER TABLE parcels 
+  ADD CONSTRAINT parcels_users_id_fk
+    FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE NO ACTION;
+     
+ALTER TABLE parcels 
+  ADD CONSTRAINT parcels_warehouse_id_fk
+    FOREIGN KEY (parcel_warehouse_id) REFERENCES warehouses(warehouse_id)
+      ON DELETE NO ACTION;
 
-CREATE TABLE permissions (
-  permission_id INT UNSIGNED NOT NULL PRIMARY KEY,
-  permission_description ENUM("Customer", "Admin", "Super-admin", "Developer")
-) ENGINE=InnoDB;
+ALTER TABLE parcels 
+  ADD CONSTRAINT parcels_addresses_id_fk
+    FOREIGN KEY (parcel_address_id) REFERENCES parcels_addresses(address_id)
+      ON DELETE NO ACTION;
+     
+ALTER TABLE shop_payments 
+  ADD CONSTRAINT shop_payments_orders_id_fk
+    FOREIGN KEY (order_id) REFERENCES orders(order_id)
+      ON DELETE CASCADE;
 
-CREATE TABLE users_permissions (
-  user_id INT UNSIGNED NOT NULL,
-  user_permission INT UNSIGNED NOT NULL,
-  PRIMARY KEY (user_id, user_permission)
-) ENGINE=InnoDB;
+-- Создаем индексы
 
-CREATE TABLE warehouses (
-  warehouse_id INT UNSIGNED DEFAULT NULL AUTO_INCREMENT PRIMARY KEY,
-  warehouse_name VARCHAR(50) DEFAULT NULL
-) ENGINE=InnoDB;
+CREATE INDEX full_name_idx
+  ON users (first_name, last_name);
 
-CREATE TABLE orders (
-  order_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  clients_number VARCHAR(12) UNIQUE NOT NULL, 
-  order_type ENUM("Ebay-BIN", "Ebay-Auction", "Online Store", "Special Order", "Mail-Forwarding"),
-  order_status ENUM("Placed", "Waiting for payment", "Waiting to be purchased", "Purchased", "Arrived to warehouse", "Shipped"),
-  order_price INT UNSIGNED NOT NULL,
-  order_commission INT UNSIGNED GENERATED ALWAYS AS (`order_price` * 0.1) STORED,
-  order_warehouse_id INT UNSIGNED DEFAULT NULL, 
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE INDEX orders_prices_idx
+  ON orders (order_id, order_price); -- поможет при подборе заказов по стоимости
 
-CREATE TABLE payments (
-  payment_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  clients_number INT UNSIGNED UNIQUE NOT NULL,
-  payment_method ENUM("Credit card", "Paypal", "QIWI", "Yandex-Money", "Promotion"),
-  payment_status ENUM("Received", "Placed", "Canceled", "Refunded"),
-  payment_amount INT UNSIGNED NOT NULL DEFAULT 10, -- минимальный размер платежа
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE INDEX orders_comissions_idx
+  ON orders (order_id, order_commission);  -- поможет при подборе заказов по комиссии
 
-CREATE TABLE bills (
-  bill_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  clients_number INT UNSIGNED UNIQUE NOT NULL,
-  bill_reference ENUM("Order", "Parcel"),
-  bill_status ENUM("Issued", "Paid", "Canceled"),
-  bill_amount INT UNSIGNED NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE INDEX orders_dates_idx
+  ON orders (order_id, created_at);
 
-CREATE TABLE parcels_addresses (
-  address_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  address_text JSON
-) ENGINE=InnoDB;
+CREATE INDEX clients_payments_idx
+  ON payments (user_id, payment_id);
+ 
+CREATE INDEX clients_bills_idx
+  ON bills (user_id, bill_id);
 
-CREATE TABLE parcels (
-  parcel_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  clients_number INT UNSIGNED UNIQUE NOT NULL,
-  parcel_status ENUM("Open", "Ready for packing", "Bill isued", "Ready for shipment", "Shipped"),
-  parcel_weight INT UNSIGNED NOT NULL,
-  shipping_agent ENUM("USPS: EMS", "USPS: Priority", "Russian Post", "First class"),
-  parcel_warehouse_id INT UNSIGNED DEFAULT NULL,
-  parcel_address_id INT UNSIGNED DEFAULT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE INDEX clients_parcels_idx
+  ON parcels (user_id, parcel_id);
+ 
+CREATE INDEX shop_payments_id_amount_idx
+  ON shop_payments (shop_payment_id, payment_amount);
+ 
+-- Создаем представления. Первое представление - данные о клиентах.
 
-CREATE TABLE shop_payments (
-  shop_payment_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  order_id INT UNSIGNED NOT NULL,
-  payment_amount INT DEFAULT NULL,
-  shop_payment_method ENUM("Company card", "Company Paypal", "Wire transfer"),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE OR REPLACE VIEW customers AS
+  SELECT CONCAT(first_name, ' ', last_name) AS name, login, id, email, phone FROM users 
+    LEFT JOIN users_permissions 
+	  ON users.id = users_permissions.user_id
+  WHERE users_permissions.user_permission = 4;
+
+-- Текущий "реальный" баланс клиента - клиенты, у которых есть оплаченные счета и полученные платежи
+
+CREATE OR REPLACE VIEW real_balance AS
+  SELECT 
+    (SUM(DISTINCT p.payment_amount) - SUM(DISTINCT b.bill_amount)) AS balance, 
+    u.id, 
+    CONCAT(u.first_name, ' ', u.last_name) AS name 
+      FROM users AS u
+        LEFT JOIN customers AS c
+          ON c.id = u.id 
+        LEFT JOIN bills AS b
+          ON b.user_id = c.id 
+        LEFT JOIN payments AS p
+          ON p.user_id = b.user_id
+          WHERE b.bill_status = 'Paid'
+          AND p.payment_status = 'Received'
+        GROUP BY u.id;
+
+-- Процедура "вид заказа для фронтэнда" - это облегченный вид заказа с меньшим количеством информации для удобства работы клиентов
+
+DROP PROCEDURE IF EXISTS frontend_order_view;
+
+DELIMITER -
+CREATE PROCEDURE frontend_order_view(IN for_user_id INT)
+  BEGIN
+    SELECT
+      CONCAT(order_types_aliases.short_alias, orders.clients_number) AS number, 
+      orders.order_type AS type, 
+      orders.order_status AS status, 
+      orders.order_price AS price, 
+      orders.order_commission AS commission,
+      warehouses.warehouse_name AS warehouse
+        FROM orders
+          JOIN order_types_aliases
+            ON order_types_aliases.full_order_type = orders.order_type 
+          RIGHT JOIN warehouses
+            ON warehouses.warehouse_id = orders.order_warehouse_id 
+          RIGHT JOIN users
+            ON users.id = orders.user_id
+        WHERE users.id = for_user_id;
+  END -
+DELIMITER ;
+
+-- Вызов процедуры для проверки работы
+CALL frontend_order_view(100);
+
+-- По моему скромному предположению подобная процедура может помочь при организации работы фронтенда
+-- Аналогичная процедура для посылок
+ 
+DROP PROCEDURE IF EXISTS frontend_parcel_view;
+
+DELIMITER -
+CREATE PROCEDURE frontend_parcel_view(IN for_user_id INT)
+  BEGIN
+    SELECT
+      CONCAT('PB-', parcels.clients_number) AS number,  
+      parcels.parcel_status AS status, 
+      parcels.parcel_weight AS weight, 
+      parcels.shipping_agent AS shipped_with,
+      parcels_addresses.address_text AS address,
+      warehouses.warehouse_name AS warehouse
+        FROM parcels
+          LEFT JOIN parcels_addresses
+            ON parcels_addresses.address_id = parcels.parcel_address_id 
+          RIGHT JOIN warehouses
+            ON warehouses.warehouse_id = parcels.parcel_warehouse_id 
+          RIGHT JOIN users
+            ON users.id = parcels.user_id 
+        WHERE users.id = for_user_id;
+  END -
+DELIMITER ;
+
+-- Вызов процедуры для проверки работы
+CALL frontend_parcel_view(100);
+
+-- Функция для генерации случайного 8-значного клиентского номера
+
+DROP FUNCTION IF EXISTS clients_number_generator;
+
+DELIMITER -
+CREATE FUNCTION clients_number_generator()
+  RETURNS INT(8) NO SQL
+  BEGIN
+	  SET @clients_number = FLOOR(1 + RAND() * 100000000);
+	  RETURN @clients_number;
+  END -
+DELIMITER ;
+
+-- Теперь с этой функцией создаем триггеры на генерацию клиентских номеров при добавлении значений в таблицы с заказами, посылками, счетами и платежами
+
+DROP TRIGGER IF EXISTS clients_order_number;
+CREATE TRIGGER clients_order_number BEFORE INSERT ON orders
+  FOR EACH ROW 
+    SET NEW.clients_number = (SELECT clients_number_generator());
+
+DROP TRIGGER IF EXISTS clients_parcel_number;
+CREATE TRIGGER clients_parcel_number BEFORE INSERT ON parcels
+  FOR EACH ROW 
+    SET NEW.clients_number = (SELECT clients_number_generator());
+
+DROP TRIGGER IF EXISTS clients_payment_number;
+CREATE TRIGGER clients_payment_number BEFORE INSERT ON payments
+  FOR EACH ROW 
+    SET NEW.clients_number = (SELECT clients_number_generator());
+
+DROP TRIGGER IF EXISTS clients_bill_number;
+CREATE TRIGGER clients_bill_number BEFORE INSERT ON bills
+  FOR EACH ROW 
+    SET NEW.clients_number = (SELECT clients_number_generator());
+
+     

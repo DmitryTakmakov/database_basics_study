@@ -633,7 +633,7 @@ CREATE TABLE `orders` (
   `order_status` enum('Placed','Waiting for payment','Waiting to be purchased','Purchased','Arrived to warehouse','Shipped') COLLATE utf8_unicode_ci DEFAULT NULL,
   `order_price` int(10) unsigned NOT NULL,
   `order_commission` int(10) unsigned NOT NULL,
-  `order_warehouse_id` int(10) unsigned DEFAULT NULL,
+  `order_warehouse_id` int(10) unsigned DEFAULT 1,
   `created_at` datetime DEFAULT current_timestamp(),
   `modified_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`order_id`),
@@ -1255,8 +1255,8 @@ CREATE TABLE `parcels` (
   `parcel_status` enum('Open','Ready for packing','Bill isued','Ready for shipment','Shipped') COLLATE utf8_unicode_ci DEFAULT NULL,
   `parcel_weight` int(10) unsigned NOT NULL,
   `shipping_agent` enum('USPS: EMS','USPS: Priority','Russian Post','First class') COLLATE utf8_unicode_ci DEFAULT NULL,
-  `parcel_warehouse_id` int(10) unsigned DEFAULT NULL,
-  `parcel_address_id` int(10) unsigned DEFAULT NULL,
+  `parcel_warehouse_id` int(10) unsigned DEFAULT 1,
+  `parcel_address_id` int(10) unsigned NOT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
   `modified_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`parcel_id`),
@@ -4234,8 +4234,9 @@ DROP TABLE IF EXISTS `warehouses`;
 
 CREATE TABLE `warehouses` (
   `warehouse_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `warehouse_name` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`warehouse_id`)
+  `warehouse_name` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
+  PRIMARY KEY (`warehouse_id`),
+  UNIQUE KEY `warehouse_name` (`warehouse_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 INSERT INTO `warehouses` (`warehouse_id`, `warehouse_name`) VALUES (1, 'FR');

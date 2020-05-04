@@ -11,8 +11,7 @@ CREATE TABLE users (
   phone VARCHAR(13) UNIQUE NOT NULL,
   country VARCHAR(50) DEFAULT NULL,
   city VARCHAR(100) DEFAULT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  INDEX first_name_last_name_idx (first_name, last_name)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS permissions;
@@ -25,20 +24,14 @@ DROP TABLE IF EXISTS users_permissions;
 CREATE TABLE users_permissions (
   user_id INT UNSIGNED NOT NULL,
   user_permission INT UNSIGNED NOT NULL,
-  PRIMARY KEY (user_id, user_permission),
-  FOREIGN KEY (user_id) 
-    REFERENCES users(id)
-      ON DELETE CASCADE,
-  FOREIGN KEY (user_permission) 
-    REFERENCES permissions(permission_id)
-      ON DELETE NO ACTION
+  PRIMARY KEY (user_id, user_permission)
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS warehouses;
 CREATE TABLE warehouses (
-  warehouse_id INT UNSIGNED DEFAULT NULL AUTO_INCREMENT PRIMARY KEY,
-  warehouse_name VARCHAR(50) UNIQUE DEFAULT NULL
-  -- по умолчанию склад может быть NULL, поскольку у клиента есть возможность создать заказ без склада
+  warehouse_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  warehouse_name VARCHAR(50) UNIQUE NOT NULL
+  -- склад с ID 1 - это как бы "отсутствие склада", пользователь может создать заказ, не выбирая склад
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS orders;
@@ -54,14 +47,7 @@ CREATE TABLE orders (
   order_warehouse_id INT UNSIGNED DEFAULT 1, 
   -- клиент может создать заказ, не привязанный к складу, а администратор уже может выбрать склад при обработке заказа
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX orders_prices_idx (order_id, order_price), -- поможет при подборе заказов по стоимости
-  INDEX orders_comissions_idx (order_id, order_commission),  -- поможет при подборе заказов по комиссии
-  INDEX orders_dates_idx (order_id, created_at),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE NO ACTION,
-  FOREIGN KEY (order_warehouse_id) REFERENCES warehouses(warehouse_id)
-    ON DELETE NO ACTION
+  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS payments;
@@ -73,10 +59,7 @@ CREATE TABLE payments (
   payment_status ENUM("Received", "Placed", "Canceled", "Refunded"),
   payment_amount INT UNSIGNED NOT NULL DEFAULT 10, -- минимальный размер платежа
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX clients_payments_idx (user_id, payment_id),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE NO ACTION
+  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS bills;
@@ -88,10 +71,7 @@ CREATE TABLE bills (
   bill_status ENUM("Issued", "Paid", "Canceled"),
   bill_amount INT UNSIGNED NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX clients_bills_idx (user_id, bill_id),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-     ON DELETE NO ACTION
+  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS parcels_addresses;
@@ -99,9 +79,7 @@ CREATE TABLE parcels_addresses (
   address_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   user_id INT UNSIGNED NOT NULL,
   -- user_id присутствует здесь, чтобы на уровне приложения не давать пользователям видеть чужие адреса
-  address_text JSON,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-     ON DELETE NO ACTION
+  address_text JSON
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS parcels;
@@ -115,17 +93,11 @@ CREATE TABLE parcels (
   parcel_warehouse_id INT UNSIGNED DEFAULT 1,
   parcel_address_id INT UNSIGNED NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX clients_parcels_idx (user_id, parcel_id),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-     ON DELETE NO ACTION,
-  FOREIGN KEY (parcel_warehouse_id) REFERENCES warehouses(warehouse_id)
-    ON DELETE NO ACTION,
-  FOREIGN KEY (parcel_address_id) REFERENCES parcels_addresses(address_id)
-    ON DELETE NO ACTION
+  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 DROP TABLE IF EXISTS shop_payments;
+-- Доступ к этой таблице закрыт для клиентов на уровне приложения
 CREATE TABLE shop_payments (
   shop_payment_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   order_id INT UNSIGNED NOT NULL,
@@ -134,7 +106,5 @@ CREATE TABLE shop_payments (
   -- платеж в магазин может быть как и нулевым (например, при акции в магазине), так и отрицательным (возврат средств)
   shop_payment_method ENUM("Company card", "Company Paypal", "Wire transfer"),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (order_id) REFERENCES orders(order_id)
-    ON DELETE CASCADE
+  modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
